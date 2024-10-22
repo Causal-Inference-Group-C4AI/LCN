@@ -412,7 +412,7 @@ If you found the LCN package useful, please cite the following papers:
     title={ Logical Credal Networks },
     author={ Marinescu, Radu and Qian, Haifeng and Gray, Alexander and Bhattacharjya, Debarun and Barahona, Francisco and Gao, Tian and Riegel, Ryan and Sahu, Pravinda },
     year={ 2022 },
-    booktitle = { NeurIPS },
+    booktitle = { Thirty-Seventh Annual Conference on Neural Information Processing Systems (NeurIPS) },
     url= {https://proceedings.neurips.cc/paper_files/paper/2022/file/62891522c00cf7323cbacb500e6cfc8d-Paper-Conference.pdf}
 }
 
@@ -420,7 +420,7 @@ If you found the LCN package useful, please cite the following papers:
     title={ Approximate Inference in Logical Credal Networks },
     author={ Marinescu, Radu and Qian, Haifeng and Gray, Alexander and Bhattacharjya, Debarun and Barahona, Francisco and Gao, Tian and Riegel, Ryan },
     year={ 2023 },
-    booktitle = { IJCAI },
+    booktitle = { Thirty-Second International Joint Conference on Artificial Intelligence (IJCAI) },
     url= {https://proceedings.neurips.cc/paper_files/paper/2022/file/62891522c00cf7323cbacb500e6cfc8d-Paper-Conference.pdf}
 }
 
@@ -439,7 +439,7 @@ If you found the LCN package useful, please cite the following papers:
     title={ Abductive Reasoning in Logical Credal Networks },
     author={ Marinescu, Radu and Lee, Junkyu and Bhattacharjya, Debarun and Cozman, Fabio and Gray, Alexander },
     year={ 2024 },
-    booktitle = { NeurIPS },
+    booktitle = { Thirty-Eighth Annual Conference on Neural Information Processing Systems (NeurIPS) },
 }
 
 ```
