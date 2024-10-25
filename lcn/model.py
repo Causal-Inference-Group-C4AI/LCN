@@ -52,6 +52,7 @@ class Formula:
         self.input_formula = formula # store the formula
         output, atoms = parse_formula(formula) # parse the formula
         if output is None or vars is None:
+            print(f"output: {output}, vars: {vars}")
             raise ValueError(f"Malformed formula: {formula}")
         
         self.parsed_formula = output # parse tree of the formula
@@ -305,6 +306,7 @@ class LCN:
         Create an empty LCN model
         """
         self.atoms = {}
+        self.cardinalities = {}
         self.sentences = {}
         self.independencies = None
     
@@ -932,7 +934,7 @@ class LCN:
             f = open(file_name, "r")
             sentences = []
             for line in f:
-                if line.strip().startswith("#") or len(line.strip()) == 0:
+                if line.strip().startswith("#") or len(line.strip()) == 0 or line.strip().startswith("c"):
                     continue # skip comments and empty lines
 
                 sen = parse_sentence(line.strip())
@@ -940,6 +942,21 @@ class LCN:
 
             f.close()
             self.add_sentences(sentences)
+            self.cardinalities = {k: 2 for k, _ in self.atoms.items()}
+            with open(file_name, "r") as f:
+                for line in f:
+                    if not line.strip().startswith("c"):
+                        continue
+                    label = line.split()[0]
+                    if label[-1] != ':':
+                        err_str = f"Syntax error in line: {line}\n"
+                        err_str += f" sentence label {label} cannot contain space and must terminate with :"
+                        raise ValueError(err_str)
+                    line = line.replace(label, '')
+                    tokens = line.split("<-")
+                    variable = tokens[0].strip()
+                    self.cardinalities[variable] = int(tokens[1].strip())
+
             print(f"Parsed LCN format with {len(sentences)} sentences.")
             print(f"Build the LCN's primal graph.")
             self.build_primal_graph()
@@ -958,7 +975,7 @@ class LCN:
 if __name__ == "__main__":
 
     # Load an LCN from a file
-    file_name = "/home/radu/git/fm-factual/examples/asia.lcn"
+    file_name = "./examples/asia.lcn"
     l = LCN()
     l.from_lcn(file_name=file_name)
 

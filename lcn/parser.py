@@ -16,7 +16,7 @@
 # The LCN parser (i.e., used to parse propositional logical formulas)
 
 import re
-from .json_schema import JsonPropositionalLogicSchema
+# from .json_schema import JsonPropositionalLogicSchema
 
 """
 Propositional Logic Clause Parser
@@ -31,6 +31,7 @@ OR_OPERATOR = -4
 NAND_OPERATOR = -5
 XNOR_OPERATOR = -6
 NOR_OPERATOR = -7
+EQUALITY_OPERATOR = -8
 
 def xor(a):
     # parity check
@@ -49,9 +50,10 @@ OPERATORS = {
     # https://en.wikipedia.org/wiki/Sheffer_stroke
     NAND_OPERATOR: {'word': 'nand', 'char': '/', 'math': '↑', 'func': lambda a: not all(a)},
     # https://en.wikipedia.org/wiki/Logical_biconditional
-    XNOR_OPERATOR: {'word': 'xnor', 'char': '=', 'math': '↔', 'func': lambda a: not xor(a)},
+    XNOR_OPERATOR: {'word': 'xnor', 'char': 'XNOR', 'math': '↔', 'func': lambda a: not xor(a)},
     # https://en.wikipedia.org/wiki/Logical_NOR
-    NOR_OPERATOR:  {'word': 'nor', 'char': '†', 'math': '↓', 'func': lambda a: not any(a)}
+    NOR_OPERATOR:  {'word': 'nor', 'char': '†', 'math': '↓', 'func': lambda a: not any(a)},
+    EQUALITY_OPERATOR: {'word': 'equals', 'char': '==', 'math': '==', 'func': lambda a: all(x == a[0] for x in a)}
 }
 
 BOOLEANS = {
@@ -70,7 +72,7 @@ class FormulaParser():
             self, 
             parentheses = ['(', ')'], 
             wrappers = ["'", '"'], 
-            operator_precedence = (-7, -6, -5, -4, -3, -2, -1)
+            operator_precedence = (-8, -7, -6, -5, -4, -3, -2, -1)
     ):
         """ 
         PLCParser class constructor 
@@ -191,6 +193,10 @@ class FormulaParser():
         """
         
         y = x.strip().lower()
+
+        if y == '=':
+            return EQUALITY_OPERATOR
+    
         # operators
         for op, d in OPERATORS.items():
             if y == d['word'] or y == d['char'] or y == d['math']:
@@ -199,6 +205,10 @@ class FormulaParser():
         for op, d in BOOLEANS.items():
             if y == d['word'] or y == d['char'] or y == d['math']:
                 return op
+            
+        if y.isdigit():
+            return int(y)
+        
         # other
         return x
 
@@ -453,10 +463,18 @@ class FormulaParser():
     def evaluate_input(i, table={}):
         """ bypass object construct """
         c = FormulaParser()
-        try:
-            return c.evaluate(i, table)
-        except:
-            return None
+        print(f"Evaluating parsed input: {i} with table: {table}")
+        # Existing logic for evaluation
+        # Print what is substituted in formula
+        for var, value in table.items():
+            print(f"Substituting {var} with value {value}")
+        result = c.evaluate(i, table)  # Whatever evaluation logic exists here
+        print(f"Final evaluation result: {result}\n")
+        return result
+        # try:
+        #     return c.evaluate(i, table)
+        # except:
+        #     return None
 
     def evaluate(
             self, 
@@ -496,11 +514,20 @@ class FormulaParser():
         if not isinstance(current_item, list):
             # truth table is possibly given
             if table and current_item in table:
-                current_item = table[current_item]
+                print(f"Returning table value: {table[current_item]}")
+                return table[current_item]
             # force item to string and lowercase for simpler comparison
             # if only single operator is given on input, then self.negate_unary_operator
             # is set to true, thus comparison here is done
-            return (str(current_item).lower() in TRUES) != self.negate_unary_operator
+            # Handle numerical literals (if any)
+            try:
+                print(f"Returning int value: {int(current_item)}")
+                return int(current_item)  # If it's a number, return it as an integer
+            except ValueError:
+                pass
+
+            print(f"Returning {str(current_item).lower() in TRUES}")
+            return 1 if (str(current_item).lower() in TRUES) else 0
         # item is a list
         a = []
         # default operator
@@ -513,9 +540,11 @@ class FormulaParser():
                 else:
                     operator = item
             else:
+                print(f"Recursive call to truth_value with item: {item} and table: {table}")
                 a.append(self.truth_value(item, table))
         # all operators have a function to check the truth value
         # we must compare returned boolean against negate parameter
+        print(f"Operator: {operator}, List to evaluate: {a}, result: {OPERATORS[operator]['func'](a)}\n")
         return OPERATORS[operator]['func'](a) == negate
 
     @staticmethod
@@ -630,3 +659,32 @@ deformat_formula = FormulaParser.deformat_input
 validate_formula = FormulaParser.validate_input
 get_variables = FormulaParser.get_variables
 json_schema = FormulaParser.json_schema
+
+fp = FormulaParser()
+# result1 = fp.parse_input("(X = 0) and (Y = 1)")
+# print(f"result1: {result1}")
+# result2 = fp.parse_input("!X and Y")
+# print(f"result2: {result2}")
+# result3 = fp.parse_input("X nand A xnor B and Y")
+# print(f"result3: {result3}")
+# result4 = fp.parse_input("X xnor A nand B and Y")
+# print(f"result4: {result4}")
+# result5 = fp.parse_input("X and A and B and Y = 0")
+# print(f"result5: {result5}")
+# result6 = fp.parse_input("X nand Y and B or A")
+# print(f"result6: {result6}")
+
+# import itertools
+# vars = ['X1', 'U']
+# cardinalities = [3, 3]
+# ranges = [range(c) for c in cardinalities]
+# items = list(itertools.product(*ranges))
+# index = {k:v for k, v in enumerate(items)}
+# N = len(items)
+
+# input_formula = "((X1 = 0)) and ((U = 0))"
+
+# for i in range(N):
+#     config = dict(zip(vars, index[i]))
+#     result7 = fp.evaluate_input(input_formula, config)
+#     print(f"evaluation of formula {input_formula} with {config}: {result7}")
