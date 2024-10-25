@@ -1,0 +1,46 @@
+# Format is the following:
+# LCN
+# list of sentences, one per line
+# label: lower_prob <= P(phi) <= upper_prob for Type 1
+# label: lower_prob <= P(phi|psi) <= upper_prob for Type 2
+# IMPORTANT: pay attention to spaces between 
+# also, the empty lines and the ones starting with # are skipped
+# Intervention: X1
+# Treatment: X2
+# Recovery: X3
+# Exogenous variable: U1, U2, U3, U4, U5
+
+# Mechanisms
+
+s2: 0 <= P(X1 | U1) <= 1
+
+s10: 0 <= P(X2 | U2 and U3 and U4 and U5 and X1) <= 1
+
+s18: 0 <= P(X3 | U6 and U7 and X2) <= 1
+
+# Dependence between U_i
+
+s19: 0 <= P(U1 | U2 or U3) <= 1
+s21: 0 <= P(U2 | U3) <= 1
+
+s22: 0 <= P(U4 | U5 or U6 or U7) <= 1
+s66: 0 <= P(U5 | U6 or U7) <= 1
+s72: 0 <= P(U6 | U7) <= 1
+
+# Empirical distributions
+
+s23: 0.16666666667 <= P(!X3 and !X2 and !X1) <= 0.16666666667 ; False
+s24: 0.16666666667 <= P(!X3 and X2 and !X1) <= 0.16666666667 ; False
+s25: 0 <= P(X3 and !X2 and !X1) <= 0 ; False
+s26: 0 <= P(X3 and X2 and !X1) <= 0 ; False
+s27: 0.16666666667 <= P(!X3 and !X2 and X1) <= 0.16666666667 ; False
+s28: 0.3333333333 <= P(!X3 and X2 and X1) <= 0.3333333333 ; False
+s29: 0 <= P(X3 and !X2 and X1) <= 0 ; False
+s30: 0.16666666667 <= P(X3 and X2 and X1) <= 0.16666666667 ; False
+
+# Twin network
+
+s31: 1 <= P(X2L) <= 1
+
+s98: 0 <= P(X3L | U6 and U7 and X2L) <= 1
+
