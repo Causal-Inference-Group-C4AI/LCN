@@ -35,10 +35,7 @@ def solve_exact_model(
         sense: str = 'min', 
         debug: bool = False,
         verbosity: int = 1,
-        max_iter: int = 10000,
-        max_cpu_time: int = 7200,
-        acceptable_tol: float = None,
-        hessian_approximation: str = None
+        max_cpu_time: int = 7200
 ) -> Tuple:
     """
     Compute exact lower/upper bounds on the probabability of the query formula
@@ -60,57 +57,40 @@ def solve_exact_model(
             A flag indicating the debugging mode.
         verbosity: int
             Verbosity level (0 is silent).
-        max_iter: int
-            Maximum number of iterations used by the ipopt solver (default 10000).
         max_cpu_time: int
-            Maximum CPU time in seconds used by the ipopt solver (default 7200 sec).
-        acceptable_tol: float
-            Acceptable tolerance value used by the ipopt solver (default 0.00001).
-        hessian_approximation: str
-            The Hessian approximation used by the ipopt solver (default 'limited-memory').
+            Maximum CPU time in seconds used by the solver (default 7200 sec).
 
     Returns:
         A tuple representing the objective value and a flag indicating its optimality.
     """
+    from pyscipopt import Model, quicksum
     
     # Create the interpretations
     vars = [k for k, _ in lcn.atoms.items()]
-    print(f"vars: {vars}")
-    cardinalities = [v for _ , v in lcn.cardinalities.items()]
-    print(f"cardinalities: {cardinalities}")
-    ranges = [range(c) for c in cardinalities]
-    # print(f"ranges: {ranges}")
-    items = list(itertools.product(*ranges))
-    # print(f"items: {items}")
+    items = list(itertools.product([0, 1], repeat=len(vars)))
     index = {k:v for k, v in enumerate(items)}
     N = len(items)
 
     # Create the model and variables
-    model = ConcreteModel()
-    model.ITEMS = Set(initialize=index.keys())
-    model.p = Var(model.ITEMS, within=NonNegativeReals)
-    model.constr = ConstraintList()
+    model = Model()
+    p = {} # dictionary of variables (each representing a probability)
+    for i in index.keys():
+        p[i] = model.addVar(f"p_{i}", vtype="C", lb=0.0, ub=1.0)
 
     # Create the constraint ensuring a probability distribution over interpretations
-    model.constr.add(sum(model.p[i] for i in model.ITEMS) == 1.0)
+    model.addCons(quicksum(p[i] for i in index.keys()) == 1.0)
 
     # Create the constraints for the sentences
     for sid, s in lcn.sentences.items():
-        # print(f"sentence: {s}")
         if s.type == SentenceType.Type1: # Type 1 sentence P(phi)
             A = [0] * N
             lobo = s.get_lower_bound()
             upbo = s.get_upper_bound()
             for j in range(N):
                 config = dict(zip(vars, index[j]))
-                # print(f"config: {config}")
                 A[j] = 1 if s.phi_formula.evaluate(table=config) == True else 0
-                # if s.phi_formula.evaluate(table=config) == True:
-                #     print(f"phi_formula: {s.phi_formula}")
-                #     print(f"j={j}, model.p[j]={model.p[j]}")
-            model.constr.add(sum(A[i]*model.p[i] for i in model.ITEMS) >= lobo)
-            model.constr.add(sum(A[i]*model.p[i] for i in model.ITEMS) <= upbo)
-            # print(f"adding constraint: {lobo} <= sum(A[i]*model.p[i] for i in model.ITEMS) <= {upbo}")
+            model.addCons(sum(A[i]*p[i] for i in index.keys()) >= lobo)
+            model.addCons(sum(A[i]*p[i] for i in index.keys()) <= upbo)
         else: # Type 2 sentence: P(phi|psi)
             Aqr = [0] * N
             Ar = [0] * N
@@ -118,16 +98,11 @@ def solve_exact_model(
             upbo = s.get_upper_bound()
             for j in range(N):
                 config = dict(zip(vars, index[j]))
-                # print(f"config: {config}")
                 Aqr[j] = 1 if s.phi_and_psi_formula.evaluate(table=config) == True else 0
                 Ar[j] = 1 if s.psi_formula.evaluate(table=config) == True else 0
-                # if s.phi_and_psi_formula.evaluate(table=config) == True and s.psi_formula.evaluate(table=config) == True:
-                #     print(f"phi_and_psi_formula: {s.phi_and_psi_formula}")
-                #     print(f"j={j}, model.p[j]={model.p[j]}")
-            val = sum(Ar[i]*model.p[i] for i in model.ITEMS)
-            model.constr.add(sum(Aqr[i]*model.p[i] for i in model.ITEMS) >= lobo*val)
-            model.constr.add(sum(Aqr[i]*model.p[i] for i in model.ITEMS) <= upbo*val)
-            # print(f"adding constraint: {lobo*val} <= sum(Aqr[i]*model.p[i] for i in model.ITEMS) <= {upbo*val}")
+            val = sum(Ar[i]*p[i] for i in index.keys())
+            model.addCons(sum(Aqr[i]*p[i] for i in index.keys()) >= lobo*val)
+            model.addCons(sum(Aqr[i]*p[i] for i in index.keys()) <= upbo*val)
 
     # Constraints corresponding to the independence assumptions
     # Atom x is conditionaly independent of non-parents non-descendants (T) 
@@ -163,9 +138,9 @@ def solve_exact_model(
                         Ab[j] = 1 if Fb.evaluate(table=interpretation) else 0
                         Ac[j] = 1 if Fc.evaluate(table=interpretation) else 0
                         Ad[j] = 1 if Fd.evaluate(table=interpretation) else 0
-                    val1 = sum(Aa[i]*model.p[i] for i in model.ITEMS) * sum(Ab[i]*model.p[i] for i in model.ITEMS)
-                    val2 = sum(Ac[i]*model.p[i] for i in model.ITEMS) * sum(Ad[i]*model.p[i] for i in model.ITEMS)
-                    model.constr.add(val1 - val2 == 0.0)    
+                    val1 = sum(Aa[i]*p[i] for i in index.keys()) * sum(Ab[i]*p[i] for i in index.keys())
+                    val2 = sum(Ac[i]*p[i] for i in index.keys()) * sum(Ad[i]*p[i] for i in index.keys())
+                    model.addCons(val1 - val2 == 0.0)    
         else:
             # no parents so basically P(x,t) = P(x)P(t)
             for t in T:
@@ -183,9 +158,9 @@ def solve_exact_model(
                     Aa[j] = 1 if Fa.evaluate(table=interpretation) else 0
                     Ab[j] = 1 if Fb.evaluate(table=interpretation) else 0
                     Ac[j] = 1 if Fc.evaluate(table=interpretation) else 0
-                val1 = sum(Aa[i]*model.p[i] for i in model.ITEMS)
-                val2 = sum(Ab[i]*model.p[i] for i in model.ITEMS) * sum(Ac[i]*model.p[i] for i in model.ITEMS)
-                model.constr.add(val1 - val2 == 0.0)    
+                val1 = sum(Aa[i]*p[i] for i in index.keys())
+                val2 = sum(Ab[i]*p[i] for i in index.keys()) * sum(Ac[i]*p[i] for i in index.keys())
+                model.addCons(val1 - val2 == 0.0)    
 
     # Create the objective
     obj_formula = Formula(label="obj", formula=query_formula)
@@ -196,11 +171,11 @@ def solve_exact_model(
 
     # Check if we have evidence
     if len(evidence) == 0:
-        obj = sum(A[i]*model.p[i] for i in model.ITEMS)
+        obj = sum(A[i]*p[i] for i in index.keys())
         if sense == 'min':
-            model.objective = Objective(expr=obj, sense=minimize)
+            model.setObjective(obj, sense='minimize')
         else:
-            model.objective = Objective(expr=obj, sense=maximize)
+            model.setObjective(obj, sense='maximize')
     else:
         ev = [k for k, _ in evidence.items()]
         Fe = make_conjunction(variables=ev, literals=evidence)
@@ -211,50 +186,30 @@ def solve_exact_model(
             E[j] = 1 if Fe.evaluate(table=interpretation) == True else 0
             if A[j] == 1 and E[j] == 1:
                 AE[j] == 1
-        obj1 = sum(AE[i]*model.p[i] for i in model.ITEMS)
-        obj2 = sum(E[i]*model.p[i] for i in model.ITEMS)
+        obj1 = sum(AE[i]*p[i] for i in index.keys())
+        obj2 = sum(E[i]*p[i] for i in index.keys())
         if sense == 'min':
-            model.objective = Objective(expr=obj1/obj2, sense=minimize)
+            model.setObjective(obj1/obj2, sense='minimize')
         else:
-            model.objective = Objective(expr=obj1/obj2, sense=maximize)
+            model.setObjective(obj1/obj2, sense='maximize')
 
     try:
         # Solve the non-linear model exactly
-        opt = SolverFactory('ipopt')
-        opt.options['max_iter'] = max_iter
-        opt.options['max_cpu_time'] = max_cpu_time
-        if acceptable_tol is not None:
-            opt.options['acceptable_tol'] = acceptable_tol
-        if hessian_approximation is not None:
-            opt.options['hessian_approximation'] = hessian_approximation
-        tee_flag = True if debug else False
-        results = opt.solve(model, tee=tee_flag)
-        if (results.solver.status == SolverStatus.ok) and \
-            (results.solver.termination_condition == TerminationCondition.optimal):
-            if verbosity > 0:
-                print(f"Solver status: {results.solver.status}")
-            objective_value = value(model.objective)
-            objective_optimal = True
-        elif (results.solver.termination_condition == TerminationCondition.infeasible):
-            if verbosity > 0:
-                print(f"Solver status: {results.solver.status}")
-            objective_value = value(model.objective)
-            objective_optimal = False
-        else:
-            if verbosity > 0:
-                print(f"Solver status: {results.solver.status}")
-            objective_value = value(model.objective)
-            objective_optimal = False
+        model.optimize()
+
+        # solution = model.getBestSol()
+        objective_value = model.getObjVal()
+        print("Optimal value:", objective_value)
 
     except Exception as e:
         if verbosity > 0:
-            print(f"Exception during ipopt: {str(e)}")
+            print(f"Exception during SCIP: {str(e)}")
         objective_value = None
         objective_optimal = False
 
     if verbosity > 0:
-        print(f"[Ipopt] objective={objective_value}, optimal={objective_optimal}")
-    return objective_value, objective_optimal
+        print(f"[SCIP] objective={objective_value}")
+    return objective_value
     
 class ExactInferece:
     """
@@ -312,57 +267,51 @@ class ExactInferece:
             for indep in self.lcn.independencies.get_assertions():
                 print(indep)
 
-        lower_bound, feasible_lb = solve_exact_model(
+        lower_bound = solve_exact_model(
             lcn=self.lcn, 
             query_formula=query_formula, 
             evidence=evidence,
             independencies=self.lcn.independencies, 
             sense='min', 
             debug=debug,
-            verbosity=verbosity,
-            acceptable_tol=0.000001,
-            hessian_approximation="limited-memory"
+            verbosity=verbosity
         )
-        upper_bound, feasible_ub = solve_exact_model(
+        upper_bound = solve_exact_model(
             lcn=self.lcn, 
             query_formula=query_formula, 
             independencies=self.lcn.independencies, 
             evidence=evidence,
             sense='max', 
             debug=debug,
-            verbosity=verbosity,
-            acceptable_tol=0.000001,
-            hessian_approximation="limited-memory"
+            verbosity=verbosity
         )
 
         t_end = time.time()
-        self.lower_bound = .0 if not feasible_lb else max(abs(lower_bound), 0.0)
-        self.upper_bound = .0 if not feasible_ub else min(abs(upper_bound), 1.0)
-        self.feasible = feasible_lb and feasible_ub
+        self.lower_bound = max(abs(lower_bound), 0.0)
+        self.upper_bound = min(abs(upper_bound), 1.0)
 
         if verbosity > 0:
             print(f"[ExactInference] Result for {query_formula} is: [ {self.lower_bound}, {self.upper_bound} ]")        
-            print(f"[ExactInference] Feasibility: lb={feasible_lb}, ub={feasible_ub}, all={self.feasible}")
             print(f"[ExactInference] Time elapsed: {t_end - t_start} sec")
 
 
 if __name__ == "__main__":
 
     # Load the LCN
-    file_name = "/home/ainoue/LCN/examples/debug_nonbinary.lcn"
+    file_name = "/home/ainoue/LCN/examples/pearl_twin_network.lcn"
     l = LCN()
     l.from_lcn(file_name=file_name)
     print(l)
 
     # Check consistency
-    ok = check_consistency(l)
-    if ok:
-        print("CONSISTENT")
-    else:
-        print("INCONSISTENT")
+    # ok = check_consistency(l)
+    # if ok:
+    #     print("CONSISTENT")
+    # else:
+    #     print("INCONSISTENT")
 
     # Run exact marginal inference
-    query = "X2 = 1"
+    query = "X3L"
     algo = ExactInferece(lcn=l)
     algo.run(query_formula=query, debug=True)
 
