@@ -52,10 +52,7 @@ def make_conjunction(variables: List, literals: Dict) -> Formula:
 
     lits = []
     for x in variables:
-        if literals[x] == 1:
-            lits.append(x)
-        else:
-            lits.append(f"!{x}")
+        lits.append(f"({x} = {literals[x]})")
     conjunction_str = " and ".join(lits)
     return Formula(label="conjunction", formula=conjunction_str)
 
@@ -74,7 +71,9 @@ def check_consistency(lcn: LCN) -> bool:
     """
     # Create the interpretations
     vars = [k for k, _ in lcn.atoms.items()]
-    items = list(itertools.product([0, 1], repeat=len(vars)))
+    cardinalities = [v for _ , v in lcn.cardinalities.items()]
+    ranges = [range(c) for c in cardinalities]
+    items = list(itertools.product(*ranges))
     index = {k:v for k, v in enumerate(items)}
     N = len(items)
 

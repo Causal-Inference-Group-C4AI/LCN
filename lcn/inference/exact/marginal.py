@@ -75,15 +75,17 @@ def solve_exact_model(
     
     # Create the interpretations
     vars = [k for k, _ in lcn.atoms.items()]
-    print(f"vars: {vars}")
     cardinalities = [v for _ , v in lcn.cardinalities.items()]
-    print(f"cardinalities: {cardinalities}")
+    cardinality_dict = dict(zip(vars, cardinalities))
     ranges = [range(c) for c in cardinalities]
-    # print(f"ranges: {ranges}")
     items = list(itertools.product(*ranges))
-    # print(f"items: {items}")
     index = {k:v for k, v in enumerate(items)}
     N = len(items)
+
+    print(f"vars: {vars}")
+    print(f"cardinalities: {cardinalities}\n")
+    # print(f"ranges: {ranges}")
+    # print(f"items: {items}")
 
     # Create the model and variables
     model = ConcreteModel()
@@ -106,8 +108,8 @@ def solve_exact_model(
                 # print(f"config: {config}")
                 A[j] = 1 if s.phi_formula.evaluate(table=config) == True else 0
                 # if s.phi_formula.evaluate(table=config) == True:
+                #     print(f"j={j}, model.p[j]={model.p[j]}, item={items[j]}")
                 #     print(f"phi_formula: {s.phi_formula}")
-                #     print(f"j={j}, model.p[j]={model.p[j]}")
             model.constr.add(sum(A[i]*model.p[i] for i in model.ITEMS) >= lobo)
             model.constr.add(sum(A[i]*model.p[i] for i in model.ITEMS) <= upbo)
             # print(f"adding constraint: {lobo} <= sum(A[i]*model.p[i] for i in model.ITEMS) <= {upbo}")
@@ -121,13 +123,16 @@ def solve_exact_model(
                 # print(f"config: {config}")
                 Aqr[j] = 1 if s.phi_and_psi_formula.evaluate(table=config) == True else 0
                 Ar[j] = 1 if s.psi_formula.evaluate(table=config) == True else 0
-                # if s.phi_and_psi_formula.evaluate(table=config) == True and s.psi_formula.evaluate(table=config) == True:
-                #     print(f"phi_and_psi_formula: {s.phi_and_psi_formula}")
-                #     print(f"j={j}, model.p[j]={model.p[j]}")
+                # if s.psi_formula.evaluate(table=config) == True or s.phi_and_psi_formula.evaluate(table=config) == True:
+                #     print(f"j={j}, model.p[j]={model.p[j]}, item={items[j]}")
+                # if s.psi_formula.evaluate(table=config) == True:
+                #     print(f"Ar[{j}] = 1 for psi_formula: {s.psi_formula}")
+                # if s.phi_and_psi_formula.evaluate(table=config) == True:
+                #     print(f"Aqr[{j}] = 1 for phi_and_psi_formula: {s.phi_and_psi_formula}")
             val = sum(Ar[i]*model.p[i] for i in model.ITEMS)
             model.constr.add(sum(Aqr[i]*model.p[i] for i in model.ITEMS) >= lobo*val)
             model.constr.add(sum(Aqr[i]*model.p[i] for i in model.ITEMS) <= upbo*val)
-            # print(f"adding constraint: {lobo*val} <= sum(Aqr[i]*model.p[i] for i in model.ITEMS) <= {upbo*val}")
+            # print(f"adding constraint: {lobo*sum(Ar[i]*model.p[i] for i in model.ITEMS if Ar[i] == 1)} <= sum(Aqr[i]*model.p[i] for i in model.ITEMS) <= {upbo*sum(Ar[i]*model.p[i] for i in model.ITEMS if Ar[i] == 1)}\n")
 
     # Constraints corresponding to the independence assumptions
     # Atom x is conditionaly independent of non-parents non-descendants (T) 
@@ -140,15 +145,19 @@ def solve_exact_model(
         X, T, S = list(indep.event1), list(indep.event2), list(indep.event3)
         if verbosity > 0:
             print(f"adding constraints for independence: {indep}")
-        configs_S = [()] if len(S) == 0 else list(itertools.product([0, 1], repeat=len(S)))     
-        if len(S) > 0:
-            for t in T:
-                # add constraints P(x|t,S) = P(x|S)
-                x = X[0]
-                literals = {x:1, t:1}
+            print(f"X: {X}, T: {T}, S: {S}")
+        if len(S) > 0:            
+            configs_S = list(itertools.product(*[range(cardinality_dict[s]) for s in S]))
+            # print(f"variable: {variable}, position: {position}, cardinality: {cardinality}")
+            for x, t in itertools.product(X, T):
+                ranges = [range(cardinality_dict[variable]) for variable in (x, t)]
+                items = list(itertools.product(*ranges))
+                for item in items:
+                    literals = {x: item[0], t: item[1]}
                 # print(f"adding constraint: {x} _||_ {t} | {S}")
                 for s in configs_S:
                     literals.update(dict(zip(S, list(s))))
+                    # print(f"literals: {literals}")
                     Aa = [0] * N
                     Ab = [0] * N
                     Ac = [0] * N
@@ -165,27 +174,51 @@ def solve_exact_model(
                         Ad[j] = 1 if Fd.evaluate(table=interpretation) else 0
                     val1 = sum(Aa[i]*model.p[i] for i in model.ITEMS) * sum(Ab[i]*model.p[i] for i in model.ITEMS)
                     val2 = sum(Ac[i]*model.p[i] for i in model.ITEMS) * sum(Ad[i]*model.p[i] for i in model.ITEMS)
-                    model.constr.add(val1 - val2 == 0.0)    
+                    model.constr.add(val1 - val2 == 0.0) 
+                    # print(f"literal: {literals}")
+                    # print(f"adding constraint: {sum(Aa[i]*model.p[i] for i in model.ITEMS if Aa[i] == 1) * sum(Ab[i]*model.p[i] for i in model.ITEMS if Ab[i] == 1)} - {sum(Ac[i]*model.p[i] for i in model.ITEMS if Ac[i] == 1) * sum(Ad[i]*model.p[i] for i in model.ITEMS if Ad[i] == 1)} == 0\n")
+
         else:
             # no parents so basically P(x,t) = P(x)P(t)
-            for t in T:
-                x = X[0]
-                literals = {x: 1, t: 1}
-                # print(f"adding constraint: {x} _||_ {t}")
-                Aa = [0] * N
-                Ab = [0] * N
-                Ac = [0] * N
-                Fa = make_conjunction(variables=X+[t], literals=literals)
-                Fb = make_conjunction(variables=X, literals=literals)
-                Fc = make_conjunction(variables=[t], literals=literals)
-                for j in range(N):
-                    interpretation = dict(zip(vars, index[j]))
-                    Aa[j] = 1 if Fa.evaluate(table=interpretation) else 0
-                    Ab[j] = 1 if Fb.evaluate(table=interpretation) else 0
-                    Ac[j] = 1 if Fc.evaluate(table=interpretation) else 0
-                val1 = sum(Aa[i]*model.p[i] for i in model.ITEMS)
-                val2 = sum(Ab[i]*model.p[i] for i in model.ITEMS) * sum(Ac[i]*model.p[i] for i in model.ITEMS)
-                model.constr.add(val1 - val2 == 0.0)    
+            for x, t in itertools.product(X, T):
+                print(f"x: {x}, t: {t}")
+                ranges = [range(cardinality_dict[variable]) for variable in (x, t)]
+                items = list(itertools.product(*ranges))
+                for item in items:
+                    literals = {x: item[0], t: item[1]}
+                    # print(f"literals: {literals}")
+                    # print(f"adding constraint: {x} _||_ {t}")
+                    Aa = [0] * N
+                    Ab = [0] * N
+                    Ac = [0] * N
+                    Fa = make_conjunction(variables=X+[t], literals=literals)
+                    Fb = make_conjunction(variables=X, literals=literals)
+                    Fc = make_conjunction(variables=[t], literals=literals)
+                    for j in range(N):
+                        interpretation = dict(zip(vars, index[j]))
+                        Aa[j] = 1 if Fa.evaluate(table=interpretation) else 0
+                        Ab[j] = 1 if Fb.evaluate(table=interpretation) else 0
+                        Ac[j] = 1 if Fc.evaluate(table=interpretation) else 0
+                        # if Aa[j] == 1:
+                        #     print(f"Aa[j] = 1 for configuration Fa: {Fa}, interpretation: {interpretation}")
+                        # if Ab[j] == 1:
+                        #     print(f"Ab[j] = 1 for configuration Fb: {Fb}, interpretation: {interpretation}")
+                        # if Ac[j] == 1:
+                        #     print(f"Ac[j] = 1 for configuration Fc: {Fc}, interpretation: {interpretation}")
+                    val1 = sum(Aa[i]*model.p[i] for i in model.ITEMS)
+                    val2 = sum(Ab[i]*model.p[i] for i in model.ITEMS) * sum(Ac[i]*model.p[i] for i in model.ITEMS)
+                    model.constr.add(val1 - val2 == 0.0) 
+                    # print(f"literal: {literals}")
+                    # print(f"adding constraint: {sum(Aa[i]*model.p[i] for i in model.ITEMS if Aa[i] == 1)} - {sum(Ab[i]*model.p[i] for i in model.ITEMS if Ab[i] == 1) * sum(Ac[i]*model.p[i] for i in model.ITEMS if Ac[i] == 1)} == 0")
+                    
+                    # print(f"val1 expression: {val1}\n")
+                    # print(f"val1 evaluated: {val1()}")
+                    # if val1() == 0:
+                    #     print(f"val1 = 0 for configuration Fa: {Fa}, interpretation: {interpretation}\n")
+    
+    # Print the constraints
+    # for i in range(1, len(model.constr) + 1):  # ConstraintList indexing starts at 1
+    #     print(f"Constraint {i}: {model.constr[i].expr}")
 
     # Create the objective
     obj_formula = Formula(label="obj", formula=query_formula)
@@ -355,16 +388,16 @@ if __name__ == "__main__":
     print(l)
 
     # Check consistency
-    ok = check_consistency(l)
-    if ok:
-        print("CONSISTENT")
-    else:
-        print("INCONSISTENT")
+    # ok = check_consistency(l)
+    # if ok:
+    #     print("CONSISTENT")
+    # else:
+    #     print("INCONSISTENT")
 
     # Run exact marginal inference
     query = "X2 = 1"
     algo = ExactInferece(lcn=l)
-    algo.run(query_formula=query, debug=True)
+    algo.run(query_formula=query, debug=False)
 
 
 

@@ -16,7 +16,7 @@
 # The LCN parser (i.e., used to parse propositional logical formulas)
 
 import re
-# from .json_schema import JsonPropositionalLogicSchema
+from .json_schema import JsonPropositionalLogicSchema
 
 """
 Propositional Logic Clause Parser
@@ -463,18 +463,19 @@ class FormulaParser():
     def evaluate_input(i, table={}):
         """ bypass object construct """
         c = FormulaParser()
-        print(f"Evaluating parsed input: {i} with table: {table}")
-        # Existing logic for evaluation
-        # Print what is substituted in formula
-        for var, value in table.items():
-            print(f"Substituting {var} with value {value}")
-        result = c.evaluate(i, table)  # Whatever evaluation logic exists here
-        print(f"Final evaluation result: {result}\n")
-        return result
-        # try:
-        #     return c.evaluate(i, table)
-        # except:
-        #     return None
+
+        # print(f"Evaluating parsed input: {i} with table: {table}")
+        # for var, value in table.items():
+        #     print(f"Substituting {var} with value {value}")
+        
+        result = c.evaluate(i, table)
+
+        # print(f"Final evaluation result: {result}\n")
+        
+        try:
+            return result
+        except:
+            return None
 
     def evaluate(
             self, 
@@ -514,19 +515,19 @@ class FormulaParser():
         if not isinstance(current_item, list):
             # truth table is possibly given
             if table and current_item in table:
-                print(f"Returning table value: {table[current_item]}")
+                # print(f"Returning table value: {table[current_item]}")
                 return table[current_item]
             # force item to string and lowercase for simpler comparison
             # if only single operator is given on input, then self.negate_unary_operator
             # is set to true, thus comparison here is done
             # Handle numerical literals (if any)
             try:
-                print(f"Returning int value: {int(current_item)}")
+                # print(f"Returning int value: {int(current_item)}")
                 return int(current_item)  # If it's a number, return it as an integer
             except ValueError:
                 pass
 
-            print(f"Returning {str(current_item).lower() in TRUES}")
+            # print(f"Returning {str(current_item).lower() in TRUES}")
             return 1 if (str(current_item).lower() in TRUES) else 0
         # item is a list
         a = []
@@ -540,11 +541,11 @@ class FormulaParser():
                 else:
                     operator = item
             else:
-                print(f"Recursive call to truth_value with item: {item} and table: {table}")
+                # print(f"Recursive call to truth_value with item: {item} and table: {table}")
                 a.append(self.truth_value(item, table))
         # all operators have a function to check the truth value
         # we must compare returned boolean against negate parameter
-        print(f"Operator: {operator}, List to evaluate: {a}, result: {OPERATORS[operator]['func'](a)}\n")
+        # print(f"Operator: {operator}, List to evaluate: {a}, result: {OPERATORS[operator]['func'](a)}\n")
         return OPERATORS[operator]['func'](a) == negate
 
     @staticmethod
