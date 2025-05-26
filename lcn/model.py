@@ -852,6 +852,65 @@ class LCN:
                 f.write(f"{str(s)}\n")
             f.close()
 
+    def parse_sentence(line: str):
+        """
+        Parse the sentence.
+
+        Args:
+            line: str
+                A string containing the sentence
+        
+        Returns:
+            A Sentence object containing the parsed sentence.
+        """
+
+        # Check the sentence label
+        label = line.split()[0]
+        if label[-1] != ':':
+            err_str = f"Syntax error in line: {line}\n"
+            err_str += f" sentence label {label} cannot contain space and must terminate with :"
+            raise ValueError(err_str)
+        
+        # Check if the flag tau is present
+        tau = False
+        if ";" in line:
+            pos = line.find(";")
+            tau = bool(line[pos+1:].strip())
+            line = line[:pos]
+
+        # Get the lower and upper bounds
+        line = line.replace(label, '')
+        tokens = line.split("<=")
+        lowbo = float(tokens[0].strip())
+        upbo = float(tokens[2].strip())
+        
+        # Get the sentence and check its syntax
+        sentence = tokens[1].strip()
+        if not sentence.startswith("P(") or sentence[-1] != ')':
+            raise ValueError(f"Syntax error: a sentence must be given as P(...)")
+        count = sentence.count("|")
+        if count == 0: # Type 1 sentence
+            phi_str = sentence[2:-1].strip()
+            phi_str = phi_str.strip()
+            psi_str = None
+        elif count == 1: # Type 2 sentence
+            pos = sentence.find("|")
+            phi_str = sentence[2:pos]
+            phi_str = phi_str.strip()
+            psi_str = sentence[pos+1:-1]
+            psi_str = psi_str.strip()
+        else:
+            raise ValueError(f"Syntax error: symbol | can only occur at most one time.")
+
+        return Sentence(
+            label=label[:-1],
+            phi=phi_str,
+            psi=psi_str,
+            lower=lowbo,
+            upper=upbo,
+            tau=tau
+        )
+
 
     def from_lcn(
             self, 

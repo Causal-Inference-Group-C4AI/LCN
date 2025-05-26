@@ -22,7 +22,7 @@ from typing import Dict, List, Tuple
 
 # Local
 from lcn.model import LCN, SentenceType, Formula
-from lcn.inference.factor_graph import FactorGraph, FactorNode, VariableNode, FactorGraphEdge
+from lcn.inference.factor_graph_radu import FactorGraph, FactorNode, VariableNode, FactorGraphEdge
 from lcn.independencies import Independencies
 from lcn.inference.utils import check_consistency, make_conjunction
 
@@ -62,7 +62,7 @@ def solve_factor_subproblem(
     assert sense in ["min", "max"]
 
     # Get all interpretations of the factor's scope
-    vars = list(sorted(f.scope))
+    vars = list(f.scope)
     items = list(itertools.product([0, 1], repeat=len(vars)))
     index = {k:v for k, v in enumerate(items)}
     multipliers = {k:v for k, v in enumerate(neighbors)}
@@ -76,18 +76,8 @@ def solve_factor_subproblem(
     # model.v = Var(model.AUX, within=NonNegativeReals)
     model.constr = ConstraintList()
 
-    if debug == True and sense == 'min':
-        print(f"n: {n.name}")
-        print(f"f: {f.label}")
-        print(f"neighbors: {neighbors}")
-        print(f"incoming: { {k: str(v) for k, v in incoming.items()} }")
-        print(f"vars: {vars}")
-        print(f"index: {index}")
-
     # Create the constraints for the factor's sentences
     model.constr.add(sum(model.p[i] for i in model.ITEMS) == 1.0)
-    if debug == True and sense == 'min':    
-        print(f"Constraint: {sum(model.p[i] for i in model.ITEMS)} == 1.0")
     for _, s in f.sentences.items():
         if s.type == SentenceType.Type1: # P(phi)
             A = [0] * N
@@ -98,9 +88,6 @@ def solve_factor_subproblem(
                 A[j] = 1 if s.phi_formula.evaluate(table=config) == True else 0
             model.constr.add(sum(A[i]*model.p[i] for i in model.ITEMS) >= lobo)
             model.constr.add(sum(A[i]*model.p[i] for i in model.ITEMS) <= upbo)
-            if debug == True and sense == 'min':    
-                print(f"Constraint for type 1 sentence {s}: {sum(A[i]*model.p[i] for i in model.ITEMS if A[i] == 1)} >= {lobo}")
-                print(f"Constraint for type 1 sentence {s}: {sum(A[i]*model.p[i] for i in model.ITEMS if A[i] == 1)} <= {upbo}")
         else: # Type 2 sentence P(phi | psi)
             Aqr = [0] * N
             Ar = [0] * N
@@ -113,10 +100,7 @@ def solve_factor_subproblem(
             val = sum(Ar[i]*model.p[i] for i in model.ITEMS)
             model.constr.add(sum(Aqr[i]*model.p[i] for i in model.ITEMS) >= lobo*val)
             model.constr.add(sum(Aqr[i]*model.p[i] for i in model.ITEMS) <= upbo*val)
-            if debug == True and sense == 'min':    
-                print(f"Constraint for type 2 sentence {s}: {sum(Aqr[i]*model.p[i] for i in model.ITEMS if Aqr[i] == 1)} <= {upbo*sum(Ar[i]*model.p[i] for i in model.ITEMS if Ar[i] == 1)}")
-                print(f"Constraint for type 2 sentence {s}: {sum(Aqr[i]*model.p[i] for i in model.ITEMS if Aqr[i] == 1)} >= {lobo*sum(Ar[i]*model.p[i] for i in model.ITEMS if Ar[i] == 1)}")
-
+    
     # Create the constraints correponding to the incoming variable_to_factor messages
     # We relax these constraints using Lagrange multipliers (model.v[j])
     for m in neighbors:
@@ -131,32 +115,23 @@ def solve_factor_subproblem(
         model.constr.add(sum(A[i]*model.p[i] for i in model.ITEMS) >= msg.lower_bound)
         model.constr.add(sum(A[i]*model.p[i] for i in model.ITEMS) <= msg.upper_bound)
 
-        if debug == True and sense == 'min':
-            print(f"Constraint for message {m}: {sum(A[i]*model.p[i] for i in model.ITEMS if A[i] == 1)} >= {msg.lower_bound}")
-            print(f"Constraint for message {m}: {sum(A[i]*model.p[i] for i in model.ITEMS if A[i] == 1)} <= {msg.upper_bound}")
-
-    # # Create the independence constraints (if any)
-    # for pair in itertools.combinations(neighbors, 2):
-    #     v1 = Formula(label=pair[0], formula=pair[0])
-    #     v2 = Formula(label=pair[1], formula=pair[1])
-    #     v12 = Formula(label=pair[0] + pair[1], formula=f"{pair[0]} and {pair[1]}")
-    #     A1 = [0] * N
-    #     A2 = [0] * N
-    #     A12 = [0] * N
-    #     for j in range(N):
-    #         config = dict(zip(vars, index[j]))  
-    #         A1[j] = 1 if v1.evaluate(table=config) == True else 0
-    #         A2[j] = 1 if v2.evaluate(table=config) == True else 0
-    #         A12[j] = 1 if v12.evaluate(table=config) == True else 0
-    #     val1 = sum(A1[i]*model.p[i] for i in model.ITEMS)
-    #     val2 = sum(A2[i]*model.p[i] for i in model.ITEMS)
-    #     val12 = sum(A12[i]*model.p[i] for i in model.ITEMS)
-    #     model.constr.add(val12 == val1 * val2)
-
-    #     if debug == True and sense == 'min':
-    #         print(f"Independence constraint: {sum(A12[i]*model.p[i] for i in model.ITEMS if A12[i] == 1)} == ({sum(A1[i]*model.p[i] for i in model.ITEMS if A1[i] == 1)}) * ({sum(A2[i]*model.p[i] for i in model.ITEMS if A2[i] == 1)})")
-    # if debug == True and sense == 'min':
-    #     print(f"(Repeat procedure for max)")
+    # Create the independence constraints (if any)
+    for pair in itertools.combinations(neighbors, 2):
+        v1 = Formula(label=pair[0], formula=pair[0])
+        v2 = Formula(label=pair[1], formula=pair[1])
+        v12 = Formula(label=pair[0] + pair[1], formula=f"{pair[0]} and {pair[1]}")
+        A1 = [0] * N
+        A2 = [0] * N
+        A12 = [0] * N
+        for j in range(N):
+            config = dict(zip(vars, index[j]))
+            A1[j] = 1 if v1.evaluate(table=config) == True else 0
+            A2[j] = 1 if v2.evaluate(table=config) == True else 0
+            A12[j] = 1 if v12.evaluate(table=config) == True else 0
+        val1 = sum(A1[i]*model.p[i] for i in model.ITEMS)
+        val2 = sum(A2[i]*model.p[i] for i in model.ITEMS)
+        val12 = sum(A12[i]*model.p[i] for i in model.ITEMS)
+        model.constr.add(val12 == val1 * val2)
 
     # Create the objective
     A = [0] * N
@@ -166,24 +141,24 @@ def solve_factor_subproblem(
         A[j] = 1 if temp.evaluate(table=config) == True else 0
 
     # penalty = 1000.0
+    # if sense == 'min':
+    #     obj = sum(A[i]*model.p[i] for i in model.ITEMS) + penalty * (sum(model.v[j] for j in model.AUX))
+    #     model.objective = Objective(expr=obj, sense=minimize)
+    # else:
+    #     obj = sum(A[i]*model.p[i] for i in model.ITEMS) - penalty * (sum(model.v[j] for j in model.AUX))
+    #     model.objective = Objective(expr=obj, sense=maximize)
     if sense == 'min':
-        obj = sum(A[i]*model.p[i] for i in model.ITEMS) # + penalty * (sum(model.v[j] for j in model.AUX))
+        obj = sum(A[i]*model.p[i] for i in model.ITEMS)
         model.objective = Objective(expr=obj, sense=minimize)
     else:
-        obj = sum(A[i]*model.p[i] for i in model.ITEMS) # - penalty * (sum(model.v[j] for j in model.AUX))
+        obj = sum(A[i]*model.p[i] for i in model.ITEMS)
         model.objective = Objective(expr=obj, sense=maximize)
-
-    if debug == True and sense == 'min':
-        print(f"Objective: {sum(A[i]*model.p[i] for i in model.ITEMS if A[i] == 1)}")
 
     try:
         # Solve the non-linear model
         opt = SolverFactory('ipopt')
-        # opt.options['constr_viol_tol'] = 1e-3  # Allow small constraint violations
-        # opt.options['acceptable_tol'] = 1e-3   # Loosen acceptance criteria
-        # opt.options['max_iter'] = 5000         # Allow more iterations
         tee_flag = True if debug else False
-        results = opt.solve(model, load_solutions=True, tee=False)
+        results = opt.solve(model, load_solutions=True, tee=tee_flag)
         if (results.solver.status == SolverStatus.ok) and \
             (results.solver.termination_condition == TerminationCondition.optimal):
             objective = sum(A[i]*model.p[i].value for i in model.ITEMS)
@@ -199,36 +174,9 @@ def solve_factor_subproblem(
         #print(f"Objective ({sense}): {objective} feasible: {feasible}")
     except Exception as e:
         print(f"Exception during ipopt: {str(e)}")
-        print(f"Failed constraints:")
-        for i, c in enumerate(model.constr):
-            if abs(c.body() - c.upper) > 1e-6 or abs(c.body() - c.lower) > 1e-6:
-                print(f"Constraint {i}: {c}")
         objective = None
         feasible = False
-
-    # if debug and sense == 'min':
-    #     print("\n--- Model Details ---")
-    #     # print("Variable values:")
-    #     # for var in model.p:
-    #     #     print(f"p[{var}]: {model.p[var].value} - bounds: {model.p[var].lb}, {model.p[var].ub}")
-    #     print("\nConstraints:")
-    #     for i, constr in enumerate(model.constr.values()):
-    #         print(f"Constraint {i + 1}: {constr.expr}")
-    #     print("\nObjective:")
-    #     for obj in model.component_objects(Objective, active=True):
-    #         print(f"{obj}: {str(obj.expr)}")
-
-    if feasible == False and debug == True and sense == 'min':
-        print(
-            f"\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-            f"INFEASIBLE: {n.name}-->{f.label}\n"
-            f"vars: {vars}\n"
-            # f"neighbors: {neighbors}\n"
-            f"incoming: { {k: str(v) for k, v in incoming.items()} }\n"
-            # f"index: {index}\n"
-            # f"multipliers: { {k: str(v) for k, v in multipliers.items()} }"
-            f"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-        )   
+    
     return objective, feasible
 
 class Message:
@@ -336,26 +284,10 @@ class Message:
                 neighbors.append(nf)
 
         # Compute the min/max of the incoming messages
-        lb = 0.0
-        ub = 1.0
         for nf in neighbors:
             msg = factor_messages[nf.label]
-            # self.lower_bound = max(self.lower_bound, msg.lower_bound)
-            # self.upper_bound = min(self.upper_bound, msg.upper_bound)
-            # if msg.lower_bound > 0.0 or msg.upper_bound < 1.0:
-            #     print(f"msg: {msg.edge} - lower bound: {msg.lower_bound}, upper bound: {msg.upper_bound}") 
-            lbc = max(lb, msg.lower_bound)
-            ubc = min(ub, msg.upper_bound)
-            if lbc < ubc: # consistent lower and upper bounds
-                lb = lbc
-                ub = ubc
-            else:
-                print(f"Incoming lower bound greater than upper bound: lb={lbc}, ub={ubc}")
-                break # stop updating the bounds
-
-        # Update the lower and upper bounds
-        self.lower_bound = max(self.lower_bound, lb)
-        self.upper_bound = min(self.upper_bound, ub)      
+            self.lower_bound = max(self.lower_bound, msg.lower_bound)
+            self.upper_bound = min(self.upper_bound, msg.upper_bound)
     # --
 
     def update_factor_to_variable(
@@ -404,12 +336,8 @@ class Message:
         
         # assert (feasible_lower_bound is True and feasible_upper_bound is True)
 
-        # self.lower_bound = max(lower_bound, 0.0) if feasible_lower_bound else self.lower_bound
-        # self.upper_bound = min(upper_bound, 1.0) if feasible_upper_bound else self.upper_bound
-        if feasible_lower_bound:
-            self.lower_bound = max(lower_bound, 0.0)
-        if feasible_upper_bound:
-            self.upper_bound = min(upper_bound, 1.0)
+        self.lower_bound = max(lower_bound, 0.0) if feasible_lower_bound else self.lower_bound
+        self.upper_bound = min(upper_bound, 1.0) if feasible_upper_bound else self.upper_bound
 # --        
 
 class Marginal:
@@ -454,7 +382,7 @@ class Marginal:
             self.lower_bound = max(self.lower_bound, msg.lower_bound)
             self.upper_bound = min(self.upper_bound, msg.upper_bound)
     
-class ApproximateInference:
+class ApproximateMarginalInference:
     """
     Approximate Inference for LCNs. Implements the belief propagation style
     algorithm described in [Marinescu et al. Approximate Inference in LCNs. IJCAI-2023].
@@ -462,7 +390,7 @@ class ApproximateInference:
 
     def __init__(
             self, 
-            lcn: LCN
+            lcn: LCN,
     ):
         """
         Constructor for the approximate inference solver.
@@ -483,7 +411,8 @@ class ApproximateInference:
             self, 
             n_iters: int = 10, 
             threshold: float = 0.000001, 
-            debug: bool = False, 
+            debug: bool = False,
+            max_factors: bool = False, 
             evidence: dict = {},
             verbosity: int = 1
     ):
@@ -497,6 +426,9 @@ class ApproximateInference:
                 The threshold used to decide the convergence of the algorithm.
             debug: bool
                 The flag indicating debugging mode (default is False).
+            max_factors: bool
+                The flag indicating maximal factors (default is False). If True,
+                only maximal factor nodes are constructed (by merging the subsummed ones).
             evidence: dict
                 The optional evidence given as input.
             verbosity: int
@@ -505,18 +437,24 @@ class ApproximateInference:
 
         self.evidence = evidence
         self.threshold = threshold
+        self.max_factors = max_factors
+
+        # Start the timer
         t_start = time.time()
 
         # Create the factor graph
         assert(self.fg is None)
-        self.fg = FactorGraph(lcn=self.lcn)
-        # if debug:
-        #     print("Factor graph")
-        #     print(self.fg)
-        self.fg.add_evidence(evidence)
-        # if debug:
-        print("Factor graph with evidence")
-        print(self.fg)
+        self.fg = FactorGraph(lcn=self.lcn, max_factors=self.max_factors)
+        if debug:
+            print("Factor graph")
+            print(self.fg)
+
+        # If evidence is given, add it to the factor graph nodes
+        if len(evidence) > 0:
+            self.fg.add_evidence(evidence)
+            if debug:
+                print("Factor graph with evidence")
+                print(self.fg)
 
         # Initialize the messages
         for e in self.fg.edges:
@@ -538,7 +476,7 @@ class ApproximateInference:
             neighbors = self.fg.variable_node_neighbors[nid] # list of factors connected to n
             incoming = {}
             for msg in self.factor_to_variable_messages:
-                if msg.edge.factor_node in neighbors and msg.edge.variable_node.name == nid:
+                if msg.edge.factor_node in neighbors and msg.edge.variable_node == n:
                     incoming[msg.edge.factor_node.label] = msg
             self.incoming_to_variable[nid] = incoming
         for fid, f in self.fg.factor_nodes.items():
@@ -561,63 +499,59 @@ class ApproximateInference:
             print("Incoming messages for variable nodes:")
             for nid, _ in self.fg.variable_nodes.items():
                 incoming = self.incoming_to_variable[nid]
-                formatted_incoming = {key: str(value) for key, value in incoming.items()}
-                print(f"  variable {nid}: {formatted_incoming}")
+                print(f"  variable {nid}: {incoming}")
             print("Incoming messages for factor nodes:")
             for fid, _ in self.fg.factor_nodes.items():
                 incoming = self.incoming_to_factor[fid]
-                formatted_incoming = {key: str(value) for key, value in incoming.items()}
-                print(f"  factor {fid}: {formatted_incoming}")
+                print(f"  factor {fid}: {incoming}")
 
         # Iterative message passing
         if verbosity > 0:
             print(f"[ApproximateInference] Running marginal inference...")
         for iter in range(n_iters):
             if verbosity > 0:
-                print(f"\n########################################## Iteration {iter} ... ##########################################")
+                print(f"Iteration {iter} ...")
             t_iter_start = time.time()
             delta = 0.0
 
             # Update variable-to-factor messages (v->f)
             if verbosity > 0:
-                print("\n### Variable to factor messages ###")
+                print("### Variable to factor messages ###")
             for msg in self.variable_to_factor_messages:
                 nid = msg.edge.variable_node.name
                 fid = msg.edge.factor_node.label
-                if fid == "f1":
+                if debug:
                     output = f"Processing variable_to_factor message: {nid}-->{fid}:"
                     output += f" [{msg.lower_bound}, {msg.upper_bound}]"
                     print(output)
 
                 lobo, upbo = msg.lower_bound, msg.upper_bound
                 factor_messages = self.incoming_to_variable[nid]
-                if fid == "f1":
-                    print(f"factor_messages: { {k: str(v) for k, v in factor_messages.items()} }")
                 msg.update_variable_to_factor(self.fg, factor_messages)
                 delta += (abs(msg.lower_bound - lobo) + abs(msg.upper_bound - upbo))    
-                if fid == "f1":
+                if debug:
                     output = f"Updated variable_to_factor message: {nid}-->{fid}:"
-                    output += f" [{msg.lower_bound}, {msg.upper_bound}]\n"
+                    output += f" [{msg.lower_bound}, {msg.upper_bound}]"
                     print(output)
             
             # Update factor-to-variable messages
             if verbosity > 0:
-                print("\n### Factor to variable messages ###")
+                print("### Factor to variable messages ###")
             for msg in self.factor_to_variable_messages:
                 nid = msg.edge.variable_node.name
                 fid = msg.edge.factor_node.label
-                if fid == "f1":
+                if debug:
                     output = f"Processing factor_to_variable message: {fid}-->{nid}:"
                     output += f" [{msg.lower_bound}, {msg.upper_bound}]"
                     print(output)
                 
                 lobo, upbo = msg.lower_bound, msg.upper_bound
                 variable_messages = self.incoming_to_factor[fid]
-                msg.update_factor_to_variable(self.fg, variable_messages, True) if fid == "f1" else msg.update_factor_to_variable(self.fg, variable_messages, False)
+                msg.update_factor_to_variable(self.fg, variable_messages, debug)
                 delta += (abs(msg.lower_bound - lobo) + abs(msg.upper_bound - upbo))
-                if fid == "f1":
+                if debug:
                     output = f"Updated factor_to_variable message: {fid}-->{nid}:"
-                    output += f" [{msg.lower_bound}, {msg.upper_bound}]\n"
+                    output += f" [{msg.lower_bound}, {msg.upper_bound}]"
                     print(output)
 
             # Early stopping condition: check for convergence
@@ -633,34 +567,21 @@ class ApproximateInference:
         # Collect marginals
         self.marginals = {}
         for nid, n in self.fg.variable_nodes.items():
-            print(f"\nVariable node: {nid}")
-            lb = 0.0
-            ub = 1.0
             marg = Marginal(n)
             factor_messages = self.incoming_to_variable[nid]
-            print(f"marg.lower_bound: {marg.lower_bound}, marg.upper_bound: {marg.upper_bound}")
             for _, msg in factor_messages.items():
-                output = f"msg {msg.edge} - lower bound: {msg.lower_bound}, upper bound: {msg.upper_bound}"
-                if msg.lower_bound > marg.lower_bound:
-                    output += f" - updating lower bound"
-                if msg.upper_bound < marg.upper_bound:
-                    output += f" - updating upper bound"
-                print(output)
-                lb = max(lb, msg.lower_bound)
-                ub = min(ub, msg.upper_bound)
-            marg.lower_bound = lb
-            marg.upper_bound = ub
-            print(f"marg lower bound: {marg.lower_bound}, upper bound: {marg.upper_bound}")
+                marg.lower_bound = max(marg.lower_bound, msg.lower_bound)
+                marg.upper_bound = min(marg.upper_bound, msg.upper_bound)
             self.marginals[nid] = marg
         
         t_end = time.time()
         
-        # if verbosity > 0:
-        print(f"[ApproximateInference] Marginals:")
-        for nid, _ in self.fg.variable_nodes.items():
-            marg = self.marginals[nid]
-            print(f"{nid}: [{marg.lower_bound}, {marg.upper_bound}]")
-        print(f"[ApproximateInference] Time elapsed: {t_end - t_start} sec")
+        if verbosity > 0:
+            print(f"[ApproximateInference] Marginals:")
+            for nid in sorted(self.fg.variable_nodes.keys()):
+                marg = self.marginals[nid]
+                print(f"{nid}: [{marg.lower_bound}, {marg.upper_bound}]")
+            print(f"[ApproximateInference] Time elapsed: {t_end - t_start} sec")
 
 if __name__ == "__main__":
 
@@ -678,6 +599,9 @@ if __name__ == "__main__":
     #     print("INCONSISTENT")
 
     # Run approximate marginal inference
-    algo = ApproximateInference(lcn=l)
-    algo.run(n_iters=10, threshold=0.00001, debug=False)
+    algo = ApproximateMarginalInference(lcn=l)
+    algo.run(n_iters=1, threshold=0.000001, debug=False)
+
+
+
 
