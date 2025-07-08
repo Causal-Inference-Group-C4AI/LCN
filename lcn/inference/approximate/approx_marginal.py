@@ -22,7 +22,7 @@ from typing import Dict, List, Tuple
 
 # Local
 from lcn.model import LCN, SentenceType, Formula
-from lcn.inference.factor_graph_radu import FactorGraph, FactorNode, VariableNode, FactorGraphEdge
+from lcn.inference.factor_graph import FactorGraph, FactorNode, VariableNode, FactorGraphEdge
 from lcn.independencies import Independencies
 from lcn.inference.utils import check_consistency, make_conjunction
 

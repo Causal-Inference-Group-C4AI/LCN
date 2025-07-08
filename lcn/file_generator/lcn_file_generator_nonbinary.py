@@ -225,7 +225,7 @@ def create_lcn(edges, unob, cardinalities, intervention_input, empirical_distrib
 def main():
     balke_pearl_nonbinary = {
         "edges": "X1 -> X2, X2 -> X3, U -> X2, U -> X3",
-        "unob": "X3",
+        "unob": "U",
         "intervention_input": ("X3", "X2", 0),
         "cardinalities": {},
         "empirical_distributions": [
@@ -280,7 +280,7 @@ def main():
         "output_file": "./examples/simple_test.lcn"
     }
 
-    create_lcn(**simple_ccomponent_zhang)
+    create_lcn(**balke_pearl_nonbinary)
 
 if __name__ == "__main__":
     main()

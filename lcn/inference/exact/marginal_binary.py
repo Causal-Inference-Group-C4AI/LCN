@@ -99,7 +99,6 @@ def solve_exact_model(
                 A[j] = 1 if s.phi_formula.evaluate(table=config) == True else 0
             model.constr.add(sum(A[i]*model.p[i] for i in model.ITEMS) >= lobo)
             model.constr.add(sum(A[i]*model.p[i] for i in model.ITEMS) <= upbo)
-            # print(f"adding constraint: {lobo} <= sum(A[i]*model.p[i] for i in model.ITEMS) <= {upbo}")
         else: # Type 2 sentence: P(phi|psi)
             Aqr = [0] * N
             Ar = [0] * N
@@ -112,7 +111,6 @@ def solve_exact_model(
             val = sum(Ar[i]*model.p[i] for i in model.ITEMS)
             model.constr.add(sum(Aqr[i]*model.p[i] for i in model.ITEMS) >= lobo*val)
             model.constr.add(sum(Aqr[i]*model.p[i] for i in model.ITEMS) <= upbo*val)
-            # print(f"adding constraint: {lobo*sum(Ar[i]*model.p[i] for i in model.ITEMS if Ar[i] == 1)} <= sum(Aqr[i]*model.p[i] for i in model.ITEMS) <= {upbo*sum(Ar[i]*model.p[i] for i in model.ITEMS if Ar[i] == 1)}\n")          
 
     # Constraints corresponding to the independence assumptions
     # Atom x is conditionaly independent of non-parents non-descendants (T) 
@@ -151,10 +149,8 @@ def solve_exact_model(
                         Ad[j] = 1 if Fd.evaluate(table=interpretation) else 0
                     val1 = sum(Aa[i]*model.p[i] for i in model.ITEMS) * sum(Ab[i]*model.p[i] for i in model.ITEMS)
                     val2 = sum(Ac[i]*model.p[i] for i in model.ITEMS) * sum(Ad[i]*model.p[i] for i in model.ITEMS)
-                    model.constr.add(val1 - val2 == 0.0)   
-                    # print(f"literal: {literals}")
-                    # print(f"adding constraint: {sum(Aa[i]*model.p[i] for i in model.ITEMS if Aa[i] == 1) * sum(Ab[i]*model.p[i] for i in model.ITEMS if Ab[i] == 1)} - {sum(Ac[i]*model.p[i] for i in model.ITEMS if Ac[i] == 1) * sum(Ad[i]*model.p[i] for i in model.ITEMS if Ad[i] == 1)} == 0\n")
- 
+                    model.constr.add(val1 - val2 == 0.0)  
+
         else:
             # no parents so basically P(x,t) = P(x)P(t)
             for t in T:
@@ -175,12 +171,6 @@ def solve_exact_model(
                 val1 = sum(Aa[i]*model.p[i] for i in model.ITEMS)
                 val2 = sum(Ab[i]*model.p[i] for i in model.ITEMS) * sum(Ac[i]*model.p[i] for i in model.ITEMS)
                 model.constr.add(val1 - val2 == 0.0)  
-                # print(f"literal: {literals}")
-                # print(f"adding constraint: {sum(Aa[i]*model.p[i] for i in model.ITEMS if Aa[i] == 1)} - {sum(Ab[i]*model.p[i] for i in model.ITEMS if Ab[i] == 1) * sum(Ac[i]*model.p[i] for i in model.ITEMS if Ac[i] == 1)} == 0")
-
-    # Print the constraints
-    # for i in range(1, len(model.constr) + 1):  # ConstraintList indexing starts at 1
-    #     print(f"Constraint {i}: {model.constr[i].expr}")
 
     # Create the objective
     obj_formula = Formula(label="obj", formula=query_formula)
@@ -373,7 +363,7 @@ if __name__ == "__main__":
     #     print("INCONSISTENT")
 
     # Run exact marginal inference
-    query = "U3"
+    query = "X3L"
     algo = ExactInferece(lcn=l)
     algo.run(query_formula=query, debug=False)
 

@@ -41,12 +41,7 @@ def solve_exact_model(
         independencies: Independencies,
         evidence: dict = {},
         sense: str = 'min', 
-        debug: bool = False,
         verbosity: int = 1,
-        max_iter: int = 10000,
-        max_cpu_time: int = 7200,
-        acceptable_tol: float = None,
-        hessian_approximation: str = None
 ) -> Tuple:
     """
     Compute exact lower/upper bounds on the probabability of the query formula
@@ -64,18 +59,8 @@ def solve_exact_model(
             A dict containing the observed evidence variables.
         sense: str
             The sense of the optimization problem. It is either `min` or `max`.
-        debug: bool
-            A flag indicating the debugging mode.
         verbosity: int
             Verbosity level (0 is silent).
-        max_iter: int
-            Maximum number of iterations used by the ipopt solver (default 10000).
-        max_cpu_time: int
-            Maximum CPU time in seconds used by the ipopt solver (default 7200 sec).
-        acceptable_tol: float
-            Acceptable tolerance value used by the ipopt solver (default 0.00001).
-        hessian_approximation: str
-            The Hessian approximation used by the ipopt solver (default 'limited-memory').
 
     Returns:
         A tuple representing the objective value and a flag indicating its optimality.
@@ -106,7 +91,6 @@ def solve_exact_model(
                     A[j] = 1 if s.phi_formula.evaluate(table=config) == True else 0
                 model.addConstr(gp.quicksum(A[i]*p[i] for i in index) >= lobo)
                 model.addConstr(gp.quicksum(A[i]*p[i] for i in index) <= upbo)
-                # print(f"adding constraint: {lobo} <= gp.quicksum(A[i]*p[i] for i in index) <= {upbo}")
             else: # Type 2 sentence: P(phi|psi)
                 Aqr = [0] * N
                 Ar = [0] * N
@@ -119,7 +103,6 @@ def solve_exact_model(
                 val = gp.quicksum(Ar[i]*p[i] for i in index)
                 model.addConstr(gp.quicksum(Aqr[i]*p[i] for i in index) >= lobo*val)
                 model.addConstr(gp.quicksum(Aqr[i]*p[i] for i in index) <= upbo*val)
-                # print(f"adding constraint: {lobo*gp.quicksum(Ar[i]*p[i] for i in index if Ar[i] == 1)} <= gp.quicksum(Aqr[i]*p[i] for i in index) <= {upbo*gp.quicksum(Ar[i]*p[i] for i in index if Ar[i] == 1)}\n")          
 
         # Constraints corresponding to the independence assumptions
         # Atom x is conditionaly independent of non-parents non-descendants (T) 
@@ -159,8 +142,6 @@ def solve_exact_model(
                         val1 = gp.quicksum(Aa[i]*p[i] for i in index) * gp.quicksum(Ab[i]*p[i] for i in index)
                         val2 = gp.quicksum(Ac[i]*p[i] for i in index) * gp.quicksum(Ad[i]*p[i] for i in index)
                         model.addConstr(val1 - val2 == 0.0)   
-                        # print(f"literal: {literals}")
-                        # print(f"adding constraint: {gp.quicksum(Aa[i]*p[i] for i in index if Aa[i] == 1) * gp.quicksum(Ab[i]*p[i] for i in index if Ab[i] == 1)} - {gp.quicksum(Ac[i]*p[i] for i in index if Ac[i] == 1) * gp.quicksum(Ad[i]*p[i] for i in index if Ad[i] == 1)} == 0\n")
     
             else:
                 # no parents so basically P(x,t) = P(x)P(t)
@@ -182,8 +163,6 @@ def solve_exact_model(
                     val1 = gp.quicksum(Aa[i]*p[i] for i in index)
                     val2 = gp.quicksum(Ab[i]*p[i] for i in index) * gp.quicksum(Ac[i]*p[i] for i in index)
                     model.addConstr(val1 - val2 == 0.0)  
-                    # print(f"literal: {literals}")
-                    # print(f"adding constraint: {gp.quicksum(Aa[i]*p[i] for i in index if Aa[i] == 1)} - {gp.quicksum(Ab[i]*p[i] for i in index if Ab[i] == 1) * gp.quicksum(Ac[i]*p[i] for i in index if Ac[i] == 1)} == 0")
 
         # Print the constraints
         # for i in range(1, len(model.constr) + 1):  # ConstraintList indexing starts at 1
@@ -356,7 +335,7 @@ if __name__ == "__main__":
     #     print("INCONSISTENT")
 
     # Run exact marginal inference
-    query = "U3"
+    query = "X3L"
     algo = ExactInferece(lcn=l)
     algo.run(query_formula=query, debug=False)
 
